@@ -38,7 +38,7 @@ void DeviceStatusChangeCallback(unsigned int devno, unsigned short status) {
 
     // }
 
-    emit DeviceModule::getInstance ()->devStatusChange (devno,status);
+    // emit DeviceModule::getInstance ()->devStatusChange (devno,status);
 
 }
 
