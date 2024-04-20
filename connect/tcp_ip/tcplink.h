@@ -23,6 +23,7 @@ public:
     QJsonObject UserLogin(QJsonObject &Obj);
     QJsonObject getAllFuncs(QJsonObject &obj);
     void WriteData(QJsonObject &obj);
+    void broadcastMessage(const QJsonObject &message);
 signals:
     void change_state_yes();
     void change_state_no();
@@ -40,6 +41,9 @@ private:
     qint64 m_requestSize;
     qint64 m_receiveSize;
     QByteArray reciveData;
+
+    QList<QTcpSocket*> connectedSockets;
+
 };
 
 

@@ -1,4 +1,6 @@
 #include "monitor.h"
+#include "QtMultimedia/qaudioformat.h"
+#include "QtMultimedia/qaudiooutput.h"
 #include "connect/dispatcher.h"
 #include "lib/NAudioServerLib.h"
 #include "qjsonobject.h"
@@ -12,15 +14,114 @@ MonitorModule *MonitorModule::getInstance()
 MonitorModule::MonitorModule(QObject *parent)
     : QObject{parent}
 {
-
+    InitMapper();
+    na_set_monitor_callback(MonitorCallback, DecodeCallback);
+    initializeAudioPlayback();
 }
+
+
+
+MonitorModule::~MonitorModule() {
+    cleanupAudioPlayback();
+}
+
+void MonitorModule::cleanupAudioPlayback() {
+    if (audioOutput) {
+        audioOutput->stop();
+        audioOutput->deleteLater();
+        audioOutput = nullptr;
+    }
+    if (audioBuffer) {
+        audioBuffer->close();
+        audioBuffer->deleteLater();
+        audioBuffer = nullptr;
+    }
+}
+
+
+
+// 定义接收监听音频数据帧的回调函数
+ void __stdcall  MonitorCallback(unsigned int devno, unsigned char* data, unsigned int len) {
+    // 这里可以处理接收到的原始音频数据帧
+    // devno 是设备的编号，data 是接收到的数据，len 是数据的长度
+    // 例如，可以将数据发送到处理线程或保存到文件
+     qDebug()<<"接收监听音频数据帧";
+}
+
+
+void MonitorModule::initializeAudioPlayback() {
+    // 设置音频格式
+    audioFormat.setSampleRate(44100); // 例如，采样率为44100Hz
+    audioFormat.setChannelCount(2);   // 立体声
+    audioFormat.setSampleSize(16);    // 16位
+    audioFormat.setCodec("audio/pcm");
+    audioFormat.setByteOrder(QAudioFormat::LittleEndian);
+
+    // 创建音频输出对象
+    audioOutput = new QAudioOutput(audioFormat, this);
+    audioOutput->setBufferSize(1024 * 1024); // 设置合适的缓冲区大小
+
+    // 创建音频缓冲区
+    audioBuffer = new QBuffer(this);
+    audioBuffer->open(QIODevice::WriteOnly);
+
+    // 启动音频输出
+    if (audioOutput->state() == QAudio::ActiveState) {
+        audioOutput->start(audioBuffer);
+    }
+}
+
+void MonitorModule::playAudio(const unsigned char *data, unsigned int len) {
+    if (audioOutput && audioBuffer && data && len > 0) {
+        // 将PCM数据写入音频缓冲区
+        audioBuffer->write(reinterpret_cast<const char*>(data), len);
+
+        // 确保音频输出正在运行
+        if (audioOutput->state() == QAudio::StoppedState) {
+            audioOutput->start(audioBuffer);
+        }
+    }
+}
+
+// 假设这是您的回调函数
+void __stdcall DecodeCallback(unsigned int devno, unsigned char* data, unsigned int len) {
+    MonitorModule *monitorModule = MonitorModule::getInstance();
+    if (monitorModule) {
+        monitorModule->playAudio(data, len);
+    }
+}
+
 
 void MonitorModule::InitMapper()
 {
-    Dispatcher *dispatcher =  Dispatcher::getDispatcher();
 
+
+    Dispatcher *dispatcher = Dispatcher::getDispatcher();
+
+    // 注册设置自动触发参数的函数
+    dispatcher->Register("setAutoTrigPara", std::bind(&MonitorModule::setAutoTrigPara, this, std::placeholders::_1));
+
+    // 注册获取自动触发参数的函数
+    dispatcher->Register("getAutoPara", std::bind(&MonitorModule::getAutoPara, this, std::placeholders::_1));
+
+    // 注册设置监听参数的函数
+    dispatcher->Register("setMonitorPara", std::bind(&MonitorModule::setMonitorPara, this, std::placeholders::_1));
+
+    // 注册获取监听参数的函数
+    dispatcher->Register("getMonitorPara", std::bind(&MonitorModule::getMonitorPara, this, std::placeholders::_1));
+
+    // 注册启动设备监听的函数
+    dispatcher->Register("startDevMonitor", std::bind(&MonitorModule::startDevMonitor, this, std::placeholders::_1));
+
+    // 注册停止设备监听的函数
+    dispatcher->Register("stopDevMonitor", std::bind(&MonitorModule::stopDevMonitor, this, std::placeholders::_1));
+
+    // 注册启动监听解码的函数
+    dispatcher->Register("startMonitorDecode", std::bind(&MonitorModule::startMonitorDecode, this, std::placeholders::_1));
+
+    // 注册停止监听解码的函数
+    dispatcher->Register("stopMonitorDecode", std::bind(&MonitorModule::stopMonitorDecode, this, std::placeholders::_1));
 }
-
 
 /** 函数名称 :设置自动触发参数
   * 函数功能 :设置设备自动触发采集参数，只对采集设备有效
@@ -85,7 +186,7 @@ QJsonObject MonitorModule::getAutoPara(QJsonObject &data){
             break;
         }
     }
-
+    qDebug()<<response;
     return response;
 }
 
@@ -151,6 +252,9 @@ QJsonObject MonitorModule::getMonitorPara(QJsonObject &data){
     int devNo = data.value("devNo").toInt();
     QJsonObject response;
 
+    auto h = m_monitorpara[devNo];
+    qDebug()<<h.file_size;
+
     auto it = m_monitorpara.find(devNo);
     if(it != m_monitorpara.end()){
         _mon_para para = it->second;
@@ -169,18 +273,96 @@ QJsonObject MonitorModule::getMonitorPara(QJsonObject &data){
 }
 
 
-QJsonObject MonitorModule::startDevMonitor(QJsonObject &data){
+/** 函数名称 :startDevMonitor
+  * 函数功能 :启动设备监听
+  * 输入参数 :devNo       : 启动监听的设备编号
+  * 返 回 值 :status      : 启动监听的状态
+  * 函数作者 :张昊
+  * 完成日期 :2024-4-1
+  * 修改记录 :
+  */
 
+
+QJsonObject MonitorModule::startDevMonitor(QJsonObject &data) {
+    int devNo = data.value("devNo").toInt();
+
+    // 调用SDK接口启动监听
+    bool status = na_start_dev_monitor(devNo);
+
+    QJsonObject response;
+    response.insert("response", "reStartDevMonitor");
+    response.insert("status", status);
+
+    return response;
 }
 
-QJsonObject MonitorModule::stopDevMonitor(QJsonObject &data){
+/**
+ * 函数名称 : stopDevMonitor
+ * 函数功能 : 停止设备监听
+ * 输入参数 : devNo       : 停止监听的设备编号
+ * 返回值 : status      : 停止监听的状态
+ * 函数作者 : 张昊
+ * 完成日期 : 2024-4-1
+ * 修改记录 :
+ */
 
+QJsonObject MonitorModule::stopDevMonitor(QJsonObject &data) {
+    int devNo = data.value("devNo").toInt();
+
+    // 调用SDK接口停止监听
+    bool status = na_stop_dev_monitor(devNo);
+
+    QJsonObject response;
+    response.insert("response", "reStopDevMonitor");
+    response.insert("status", status);
+
+    return response;
 }
 
-QJsonObject MonitorModule::startMonitorDecode(QJsonObject &data){
 
+/**
+ * 函数名称 : startMonitorDecode
+ * 函数功能 : 启动监听解码
+ * 输入参数 : devNo       : 启动监听解码的设备编号
+ * 返回值 : status      : 启动监听解码的状态
+ * 函数作者 : 张昊
+ * 完成日期 : 2024-4-1
+ * 修改记录 :
+ */
+
+QJsonObject MonitorModule::startMonitorDecode(QJsonObject &data) {
+    int devNo = data.value("devNo").toInt();
+
+    // 调用SDK接口启动监听解码
+    bool status = na_start_monitor_decode(devNo);
+
+    QJsonObject response;
+    response.insert("response", "reStartMonitorDecode");
+    response.insert("status", status);
+
+    return response;
 }
 
-QJsonObject MonitorModule::stopMonitorDecode(QJsonObject &data){
 
+/**
+ * 函数名称 : stopMonitorDecode
+ * 函数功能 : 停止监听解码
+ * 输入参数 : devNo       : 停止监听解码的设备编号
+ * 返回值 : status      : 停止监听解码的状态
+ * 函数作者 : 张昊
+ * 完成日期 : 2024-4-1
+ * 修改记录 :
+ */
+
+QJsonObject MonitorModule::stopMonitorDecode(QJsonObject &data) {
+    int devNo = data.value("devNo").toInt();
+
+    // 调用SDK接口停止监听解码
+    bool status = na_stop_monitor_decode(devNo);
+
+    QJsonObject response;
+    response.insert("response", "reStopMonitorDecode");
+    response.insert("status", status);
+
+    return response;
 }

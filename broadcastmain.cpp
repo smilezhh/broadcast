@@ -21,7 +21,7 @@ BroadcastMain::BroadcastMain(QWidget *parent)
         databaselink();
     });
 
-    // httpserver::getserver()->Listen(8080);
+    // // httpserver::getserver()->Listen(8080);
 
     InitServer *ini = new InitServer("192.168.0.183",8890);
 

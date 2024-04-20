@@ -164,7 +164,7 @@ QJsonObject FileModule::ReDeleteFile(QJsonObject &data)
 QJsonObject FileModule::ReInquireFile(QJsonObject &data)
 {
     QString fuzzyName = data.value("fuzzyName").toString();
-    bool checkStatus  = data.value("checkStatus").toBool();
+    int checkStatus  = data.value("checkStatus").toInt();
 
     auto fileList = SelectFileList(checkStatus, fuzzyName);
 

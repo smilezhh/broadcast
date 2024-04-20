@@ -1,4 +1,4 @@
-#include "play.h"
+ #include "play.h"
 #include "dbinteraction.h"
 #include "device.h"
 #include "connect/dispatcher.h"
@@ -79,6 +79,10 @@ void PlayModule::InitMapper()
 
     Func reGetDevsUsing = std::bind(&PlayModule::getDevsUsing, this, _1);
     dispatcher->Register("getDevsUsing", reGetDevsUsing);
+
+    Func reGetDevPromMessage = std::bind(&PlayModule::getDevPromMessage , this, _1);
+    dispatcher->Register("getDevPromMessage", reGetDevPromMessage);
+
 
 }
 
@@ -489,26 +493,38 @@ QJsonObject PlayModule::startPlayInRandom(QJsonObject &data){
 }
 
 QJsonObject PlayModule::getDevsUsing(QJsonObject &data){
-    QVector<Device> device = SelectDevs();//DEVS_PLAYING
-    QJsonArray devLists;
-    bool status = false;
-    for(int i=0;i<device.size ();i++){
-        unsigned short status;
-        na_get_device_status(device[i].devNo,&status);
-        if(status==DEVS_PLAYING){
-            QJsonObject devInfo;
-            devInfo["devName"] = device[i].devName;
-            devInfo["devNo"] = (int)device[i].devNo;
-            devLists.append(devInfo);
-            status = true;
+    QVector<Group> groups = GetAllGroup();
+    QJsonArray groupLists;
+    bool status1 = false;
+    for(int i=0;i<groups.size ();i++){
+        QJsonArray devLists;
+        QVector<Device> devices = SelectGpDevs(groups[i].groupNo);
+        for(int j=0;j<devices.size ();j++){
+            unsigned short status;
+            na_get_device_status(devices[j].devNo,&status);
+            if(status==DEVS_PLAYING){
+                QJsonObject devInfo;
+                devInfo["devName"] = devices[j].devName;
+                devInfo["devNo"] = (int)devices[j].devNo;
+                devLists.append(devInfo);
+                status1 = true;
+            }
+        }
+        if(!devLists.isEmpty()){
+            QJsonObject groupInfo;
+            groupInfo["groupName"] = groups[i].groupName;
+            groupInfo["groupNo"] = (int)groups[i].groupNo;
+            groupInfo["devLists"] = devLists;
+            groupLists.append(groupInfo);
         }
     }
     QJsonObject obj;
     obj.insert("response", "reGetDevsUsing");
-    obj.insert ("devLists", devLists);
-    obj.insert("status", status);
+    obj.insert ("devLists", groupLists);
+    obj.insert("status", status1);
     return obj;
 }
+
 
 QJsonObject PlayModule::getDevPromMessage(QJsonObject &data){
     // 从 data 中提取设备编号

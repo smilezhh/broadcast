@@ -1,13 +1,15 @@
 ﻿#include "device.h"
+#include "connect/tcp_ip/tcplink.h"
 #include "function/dbinteraction.h"
 #include "connect/dispatcher.h"
+#include "qjsondocument.h"
 
 #include <lib/NAudioServerLib.h>
 #include <QDebug>
 #include <QJsonArray>
 #include <QSqlError>
 #include <QSqlQuery>
-
+#include<QApplication>
 DeviceModule *DeviceModule::getInstance()
 {
     static DeviceModule deviceModule;
@@ -20,8 +22,31 @@ DeviceModule::DeviceModule(QObject *parent)
 {
     InitDev();
     InitMappper();
+    na_set_callback(DeviceStatusChangeCallback,PlayStatusChangeCallback);
+    connect(this,&DeviceModule::devStatusChange,this,&DeviceModule::solveDevStatusChange);
+}
+
+
+
+void DeviceStatusChangeCallback(unsigned int devno, unsigned short status) {
+
+    // QThread *currentThread = QThread::currentThread();
+    // QThread *mainThread = QApplication::instance()->thread();
+    // if (currentThread != mainThread) {
+    //     qDebug() << "This callback is not running on the main thread!";
+    //     // 考虑使用信号/槽或QMetaObject::invokeMethod跨线程安全地调用GUI线程上的方法
+
+    // }
+
+    emit DeviceModule::getInstance ()->devStatusChange (devno,status);
 
 }
+
+void PlayStatusChangeCallback(unsigned char scene, unsigned char inst, unsigned int status){
+    // qDebug() << "play:" ;
+
+}
+
 
 void DeviceModule::InitMappper()
 {
@@ -72,7 +97,7 @@ QJsonObject DeviceModule::ReGroupDevs(QJsonObject &data)
         QJsonObject devObj;
         devObj.insert("devNo", (int)dev.devNo);
         devObj.insert("devName", dev.devName);
-        devObj.insert("devStatus", (dev.devStatus == DEVS_IDLE));
+        devObj.insert("devStatus", dev.devStatus);
         devObj.insert("devVolume", dev.volume);
 
         devList.append(devObj);
@@ -151,6 +176,8 @@ void DeviceModule::setVolume(unsigned int devNo, unsigned char volume)
     m_rwLock.unlock();
 }
 
+
+
 void DeviceModule::startStartVolume(){
     QVector<Device> devs = SelectDevs();
     for(auto dev : devs) {
@@ -159,4 +186,19 @@ void DeviceModule::startStartVolume(){
             na_set_device_volume(dev.devNo,dev.volume);
         }
     }
+}
+
+
+void DeviceModule::solveDevStatusChange(unsigned int devno, unsigned short status)
+{
+
+    int groupNo = getDevGroupNo (devno);
+    QJsonObject obj;
+    obj.insert("devno", (int)devno);
+    obj.insert("status", status);
+    obj.insert("groupNo", groupNo);
+    qDebug()<<groupNo;
+    TcpLink::getTcpLink ()->broadcastMessage (Dispatcher::getDispatcher ()->Dispatch ("getDevsUsing",obj));
+    TcpLink::getTcpLink ()->broadcastMessage (Dispatcher::getDispatcher ()->Dispatch ("getGroupDevs",obj));
+
 }

@@ -1,7 +1,7 @@
 #ifndef USER_MANAGE_H
 #define USER_MANAGE_H
-
-
+class AddUser;
+#include "UI/user/add/adduser.h"
 #include <QWidget>
 #include <QScrollBar>
 #include <QSqlQuery>
@@ -11,6 +11,8 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonDocument>
+#include <ui_adduser.h>
+
 #include "connect/dispatcher.h"
 #include "function/dbinteraction/dbselectupdate.h"
 namespace Ui {
@@ -18,7 +20,6 @@ class User_Manage;
 }
 
 class BroadcastMain;
-class AddUser;
 class User_Manage : public QWidget
 {
     Q_OBJECT

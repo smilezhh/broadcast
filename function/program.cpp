@@ -120,16 +120,20 @@ QJsonObject ProgramModule::ReUpdateProgram(QJsonObject &data)
     QTime duration   = QTime::fromString(data.value("playDuration").toString(), "hh:mm:ss");
 
     // 写入数据库
-    bool status = UpdateProgram(oldPmNo, newPmNo, pmName, playType, duration);
+    bool status = UpdateProgram(oldPmNo, newPmNo,pmType, pmName, playType, duration);
 
     // 添加定时节目信息
     if (pmType == 1) {
+        qDebug()<<"**";
         int weekCnt     = data.value("weekCnt").toInt();
         QDate startDate = QDate::fromString(data.value("startDate").toString(), "yyyy-MM-dd");
         QDate endDate   = QDate::fromString(data.value("endDate").toString(), "yyyy-MM-dd");
         QTime startTime = QTime::fromString(data.value("startTime").toString(), "hh:mm:ss");
         // 写入数据库
-        status |= UpdateTimingInfo(newPmNo, startDate, endDate, startTime, weekCnt);
+        if(SelectTimeingInfo (newPmNo))
+            status |= UpdateTimingInfo(newPmNo, startDate, endDate, startTime, weekCnt);
+        else
+            status |= AddTimingInfo(newPmNo, startDate, endDate, startTime, weekCnt);
     }
 
     QJsonObject obj;

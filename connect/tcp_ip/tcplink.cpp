@@ -17,6 +17,7 @@ void TcpLink::newConnectSlot()
     socket=tcpserver->nextPendingConnection();//获取已经连接的客户端套接字
     qDebug() << "newConnectSlot执行";
     emit change_state_yes();
+    connectedSockets.append(socket);
     connect(socket,SIGNAL(readyRead()),this,SLOT(readyRead_Slot()));
     connect(socket,SIGNAL(disconnected()),this,SLOT(Disconnected_Slot()));
 }
@@ -58,6 +59,8 @@ void TcpLink::readyRead_Slot()
 void TcpLink::Disconnected_Slot()
 {
     emit change_state_no();
+    connectedSockets.removeAll(socket);
+    socket->deleteLater(); // 清理套接字
 }
 
 void TcpLink::JsonAnalysis(QByteArray &buf)
@@ -73,6 +76,37 @@ void TcpLink::JsonAnalysis(QByteArray &buf)
     WriteData(writejs);
 
 
+}
+void TcpLink::WriteData(QJsonObject &obj)
+{
+    QJsonDocument doc;
+    doc.setObject(obj);
+    QByteArray array = doc.toJson();
+    qDebug()<<QString(array);
+    qDebug()<<array.size();
+    QDataStream out(socket);
+    out.setVersion(QDataStream::Qt_4_1);
+    out << (qint64)array.size();
+
+    out << array;
+    socket->flush();
+}
+
+// TcpLink类的成员函数
+void TcpLink::broadcastMessage(const QJsonObject &message)
+{
+    QByteArray jsonBytes = QJsonDocument(message).toJson(QJsonDocument::Compact);
+    for (QTcpSocket *socket : connectedSockets) {
+        if (socket->state() == QTcpSocket::ConnectedState) {
+            // 写入数据大小
+            QDataStream out(socket);
+            out.setVersion(QDataStream::Qt_4_1);
+            out << (qint64)jsonBytes.size();
+
+            out << jsonBytes;
+            socket->flush();
+        }
+    }
 }
 
 QJsonObject TcpLink::UserLogin(QJsonObject &Obj)
@@ -190,18 +224,3 @@ QJsonObject TcpLink::getAllFuncs(QJsonObject &obj)
     return requestjson;
 }
 
-void TcpLink::WriteData(QJsonObject &obj)
-{
-    QJsonDocument doc;
-    doc.setObject(obj);
-    QByteArray array = doc.toJson();
-    qDebug()<<QString(array);
-    qDebug()<<array.size();
-    QDataStream out(socket);
-    out.setVersion(QDataStream::Qt_4_1);
-    out << (qint64)array.size();
-//    int res = out.writeRawData(array.constData(), array.size());
-//    qDebug() << strlen(array.constData());
-    out << array;
-    socket->flush();
-}

@@ -611,7 +611,7 @@ int __stdcall na_start_monitor_decode(unsigned int devno);
 
 /*停止监听解码,不再解码音频数据
 */
-int __stdcall na_stop_monitor_decode();
+int __stdcall na_stop_monitor_decode(unsigned int devno);
 
 /**************************************对讲接口*******************************************/
 /*设置软件端对讲编码格式

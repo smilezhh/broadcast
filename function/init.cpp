@@ -2,6 +2,7 @@
 #include "connect/websocket/websocket.h"
 #include "device.h"
 #include "file.h"
+#include "function/monitor.h"
 #include "group.h"
 
 #include "play.h"
@@ -47,5 +48,8 @@ void InitServer::InitModule()
 
     // 播放模块
     PlayModule::getInstance();
+
+    //监听模块
+    MonitorModule::getInstance ();
 
 }
